@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Document Generator — API tester</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <h1>Document Generator</h1>
+      <p class="sub">Test client for <code>POST /api/generate</code>. Pick a format, supply a template, fill in content, generate.</p>
+    </header>
+
+    <form id="gen-form">
+      <div class="row">
+        <label for="document_type">Document type</label>
+        <select id="document_type" name="document_type" required></select>
+        <p class="hint" id="format-hint"></p>
+      </div>
+
+      <div class="row">
+        <label for="template">Template file</label>
+        <input type="file" id="template" name="template" />
+        <p class="hint">Office formats (docx/pptx/xlsx) need an uploaded file. For txt/md/html/csv/pdf you may paste a template below instead.</p>
+      </div>
+
+      <div class="row" id="template-text-row">
+        <label for="template_text">…or paste a text/HTML template</label>
+        <textarea id="template_text" name="template_text" rows="6" spellcheck="false" placeholder="Hello {{ name }}, your order {{ order_id }} is ready."></textarea>
+      </div>
+
+      <div class="row">
+        <label for="content">Content (JSON)</label>
+        <textarea id="content" name="content" rows="8" spellcheck="false">{
+  "name": "Ada Lovelace",
+  "order_id": "A-1042"
+}</textarea>
+        <p class="hint">A JSON object. Keys map to <code>{{ '{{ placeholders }}' }}</code> in the template; lists drive <code>{{ '{% for %}' }}</code> loops.</p>
+      </div>
+
+      <div class="row">
+        <label for="filename">Download filename <span class="muted">(optional)</span></label>
+        <input type="text" id="filename" name="filename" placeholder="document" />
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="submit-btn">Generate &amp; download</button>
+        <span id="status" class="status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{{ company_name }}
+{{ date }}
+
+Dear {{ customer_name }},
+
+Thank you for your order. Your invoice number is {{ invoice_number }}.
+
+Items: {% for item in items %}{{ item.name }} ({{ item.amount }}){% if not loop.last %}, {% endif %}{% endfor %}
+
+Total due: {{ total }}
+
+Regards,
+{{ company_name }}

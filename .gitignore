@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Generated binary sample templates (recreate with: python samples/make_samples.py)
+samples/*.docx
+samples/*.pptx
+samples/*.xlsx
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
