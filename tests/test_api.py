@@ -32,6 +32,18 @@ def client():
     return flask_app.app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def reset_config():
+    """Keep optional auth/CORS off by default and restore after each test."""
+    app = flask_app.app
+    saved = {k: app.config.get(k) for k in
+             ("API_KEY", "ALLOWED_ORIGINS", "MAX_CONTENT_LENGTH")}
+    app.config["API_KEY"] = None
+    app.config["ALLOWED_ORIGINS"] = []
+    yield
+    app.config.update(saved)
+
+
 # --- in-memory template builders ------------------------------------------
 
 def _docx_template() -> bytes:
@@ -186,3 +198,171 @@ def test_missing_content_key_is_error(client):
     })
     assert res.status_code == 500
     assert "Generation failed" in res.get_json()["error"]
+
+
+# --- versioning ------------------------------------------------------------
+
+def test_health_returns_version(client):
+    res = client.get("/api/health")
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["status"] == "ok"
+    assert isinstance(body["version"], str) and body["version"]
+
+
+def test_formats_includes_version(client):
+    res = client.get("/api/formats")
+    assert isinstance(res.get_json().get("version"), str)
+
+
+# --- uniform error envelope + machine codes --------------------------------
+
+def test_code_unsupported_type(client):
+    res = client.post("/api/generate", data={
+        "document_type": "xyz", "template_text": "x", "content": "{}"})
+    assert res.status_code == 400
+    assert res.get_json()["code"] == "unsupported_type"
+
+
+def test_code_invalid_json(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{not json", "template_text": "x"})
+    assert res.status_code == 400
+    assert res.get_json()["code"] == "invalid_json"
+
+
+def test_code_content_not_object(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "[1, 2, 3]", "template_text": "x"})
+    assert res.status_code == 400
+    assert res.get_json()["code"] == "content_not_object"
+
+
+def test_code_template_required(client):
+    res = client.post("/api/generate", data={
+        "document_type": "docx", "content": "{}"})
+    assert res.status_code == 400
+    assert res.get_json()["code"] == "template_required"
+
+
+def test_code_no_template(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}"})
+    assert res.status_code == 400
+    assert res.get_json()["code"] == "no_template"
+
+
+def test_code_render_failed(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}", "template_text": "Hi {{ nope }}"})
+    assert res.status_code == 500
+    assert res.get_json()["code"] == "render_failed"
+
+
+def test_413_returns_json_too_large(client):
+    flask_app.app.config["MAX_CONTENT_LENGTH"] = 64
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}", "template_text": "x" * 500})
+    assert res.status_code == 413
+    assert res.mimetype == "application/json"
+    assert res.get_json()["code"] == "too_large"
+
+
+def test_unknown_route_returns_json(client):
+    res = client.get("/api/does-not-exist")
+    assert res.status_code == 404
+    assert res.mimetype == "application/json"
+    assert "code" in res.get_json()
+
+
+# --- configurable strictness ----------------------------------------------
+
+def test_strict_false_blanks_txt(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}",
+        "template_text": "A{{ missing }}B", "strict": "false"})
+    assert res.status_code == 200
+    assert res.data == b"AB"
+
+
+def test_strict_false_blanks_pdf(client):
+    res = client.post("/api/generate", data={
+        "document_type": "pdf", "content": "{}",
+        "template_text": "<p>{{ missing }}</p>", "strict": "false"})
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
+
+
+def test_docx_default_blanks_missing(client):
+    # docx default (no strict field) renders a missing key blank -> success.
+    res = client.post("/api/generate", data={
+        "document_type": "docx", "content": "{}",
+        "template": (io.BytesIO(_docx_template()), "t.docx"),
+    }, content_type="multipart/form-data")
+    assert res.status_code == 200
+
+
+def test_strict_true_errors_docx(client):
+    res = client.post("/api/generate", data={
+        "document_type": "docx", "content": "{}", "strict": "true",
+        "template": (io.BytesIO(_docx_template()), "t.docx"),
+    }, content_type="multipart/form-data")
+    assert res.status_code == 500
+    assert res.get_json()["code"] == "render_failed"
+
+
+# --- filename sanitization -------------------------------------------------
+
+def test_filename_traversal_neutralized(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}", "template_text": "hi",
+        "filename": "../../etc/passwd"})
+    assert res.status_code == 200
+    disposition = res.headers["Content-Disposition"]
+    assert "passwd.txt" in disposition
+    assert ".." not in disposition
+    assert "/" not in disposition.split("filename=")[-1]
+
+
+# --- optional auth ---------------------------------------------------------
+
+def test_auth_rejects_bad_key(client):
+    flask_app.app.config["API_KEY"] = "secret"
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}", "template_text": "hi"})
+    assert res.status_code == 401
+    assert res.get_json()["code"] == "unauthorized"
+
+
+def test_auth_accepts_good_key(client):
+    flask_app.app.config["API_KEY"] = "secret"
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}", "template_text": "hi"},
+        headers={"X-API-Key": "secret"})
+    assert res.status_code == 200
+
+
+def test_no_auth_required_when_unset(client):
+    res = client.post("/api/generate", data={
+        "document_type": "txt", "content": "{}", "template_text": "hi"})
+    assert res.status_code == 200
+
+
+# --- optional CORS ---------------------------------------------------------
+
+def test_cors_headers_when_configured(client):
+    flask_app.app.config["ALLOWED_ORIGINS"] = ["https://app.example"]
+    res = client.get("/api/formats", headers={"Origin": "https://app.example"})
+    assert res.headers.get("Access-Control-Allow-Origin") == "https://app.example"
+    assert "X-API-Key" in res.headers.get("Access-Control-Allow-Headers", "")
+
+
+def test_no_cors_headers_by_default(client):
+    res = client.get("/api/formats", headers={"Origin": "https://app.example"})
+    assert "Access-Control-Allow-Origin" not in res.headers
+
+
+def test_cors_ignores_unlisted_origin(client):
+    flask_app.app.config["ALLOWED_ORIGINS"] = ["https://app.example"]
+    res = client.get("/api/formats", headers={"Origin": "https://evil.example"})
+    assert "Access-Control-Allow-Origin" not in res.headers

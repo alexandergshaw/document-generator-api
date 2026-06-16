@@ -1,19 +1,19 @@
 """Text-family generator (txt / md / html / csv).
 
-The uploaded template is treated as a Jinja2 template string and rendered with
-the supplied content. ``StrictUndefined`` is used so a placeholder with no
-matching content key raises a clear error instead of silently rendering blank.
+The uploaded (or pasted) template is treated as a Jinja2 template string and
+rendered with the supplied content. Strictness is configurable; this family
+defaults to strict (an undefined key is an error).
 """
 from __future__ import annotations
 
-from jinja2 import BaseLoader, Environment, StrictUndefined
+from ._jinja import make_env, resolve_strict
 
-# autoescape is intentionally off: this is a generic templating tool and the
-# caller controls both template and content. (Note this for HTML/PDF output.)
-_env = Environment(loader=BaseLoader(), undefined=StrictUndefined, autoescape=False)
+# Historical behavior: text formats error on a missing key.
+_DEFAULT_STRICT = True
 
 
-def generate(template_bytes: bytes, content: dict) -> bytes:
+def generate(template_bytes: bytes, content: dict, strict=None) -> bytes:
+    env = make_env(resolve_strict(strict, _DEFAULT_STRICT))
     template_str = template_bytes.decode("utf-8")
-    rendered = _env.from_string(template_str).render(**content)
+    rendered = env.from_string(template_str).render(**content)
     return rendered.encode("utf-8")

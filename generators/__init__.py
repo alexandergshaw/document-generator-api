@@ -3,7 +3,11 @@
 Maps a requested output document type to the module that produces it. Every
 generator implements the same tiny contract::
 
-    generate(template_bytes: bytes, content: dict) -> bytes
+    generate(template_bytes: bytes, content: dict, strict: bool | None = None) -> bytes
+
+``strict`` controls missing-key behavior: True errors on an undefined key, False
+renders it blank, and None means "use this format's default". The text-family,
+pdf, pptx and xlsx generators default to strict; docx defaults to lenient.
 
 `app.py` looks up the requested format here and dispatches to it. Adding a new
 output format is a two-step job: write a `generate()` in a new module, then add
@@ -24,7 +28,7 @@ class Format:
     name: str
     mime: str
     extension: str
-    generate: Callable[[bytes, dict], bytes]
+    generate: Callable[[bytes, dict, "bool | None"], bytes]
     # True when the template MUST arrive as an uploaded binary file (Office
     # formats); False when a raw text template may be pasted instead.
     requires_template: bool = False

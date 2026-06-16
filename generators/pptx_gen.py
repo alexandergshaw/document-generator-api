@@ -8,27 +8,32 @@ v1 limitation: rendering happens at the paragraph level. When a marker spans
 multiple text runs with different formatting, the rendered text inherits the
 first run's formatting and the remaining runs are emptied. Keep each placeholder
 within a single run/format for best fidelity.
+
+To repeat content (rows, bullets), drive it from a list variable with a Jinja
+loop / per-paragraph markers — not by duplicating the same placeholder, which
+renders one value everywhere. See README "Repeating content".
 """
 from __future__ import annotations
 
 from io import BytesIO
 
-from jinja2 import BaseLoader, Environment, StrictUndefined
 from pptx import Presentation
 
-_env = Environment(loader=BaseLoader(), undefined=StrictUndefined, autoescape=False)
+from ._jinja import make_env, resolve_strict
+
+_DEFAULT_STRICT = True
 
 
 def _has_marker(value: str) -> bool:
     return "{{" in value or "{%" in value
 
 
-def _process_text_frame(text_frame, content: dict) -> None:
+def _process_text_frame(text_frame, env, content: dict) -> None:
     for para in text_frame.paragraphs:
         full_text = "".join(run.text for run in para.runs)
         if not _has_marker(full_text):
             continue
-        rendered = _env.from_string(full_text).render(**content)
+        rendered = env.from_string(full_text).render(**content)
         if para.runs:
             para.runs[0].text = rendered
             for run in para.runs[1:]:
@@ -37,16 +42,17 @@ def _process_text_frame(text_frame, content: dict) -> None:
             para.add_run().text = rendered
 
 
-def generate(template_bytes: bytes, content: dict) -> bytes:
+def generate(template_bytes: bytes, content: dict, strict=None) -> bytes:
+    env = make_env(resolve_strict(strict, _DEFAULT_STRICT))
     prs = Presentation(BytesIO(template_bytes))
     for slide in prs.slides:
         for shape in slide.shapes:
             if shape.has_text_frame:
-                _process_text_frame(shape.text_frame, content)
+                _process_text_frame(shape.text_frame, env, content)
             elif shape.has_table:
                 for row in shape.table.rows:
                     for cell in row.cells:
-                        _process_text_frame(cell.text_frame, content)
+                        _process_text_frame(cell.text_frame, env, content)
     out = BytesIO()
     prs.save(out)
     return out.getvalue()

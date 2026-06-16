@@ -1,8 +1,8 @@
 """PDF generator.
 
-Treats the uploaded template as an HTML document, renders it with Jinja2, then
-converts the HTML to PDF with xhtml2pdf (pure-Python, no system binaries —
-chosen so the project installs with a single ``pip install`` on Windows).
+Treats the uploaded (or pasted) template as an HTML document, renders it with
+Jinja2, then converts the HTML to PDF with xhtml2pdf (pure-Python, no system
+binaries — so the project installs with a single ``pip install`` on Windows).
 
 For higher CSS fidelity, swap in WeasyPrint (needs GTK on Windows); to produce a
 PDF that matches a Word/PowerPoint template exactly, fill the Office template
@@ -12,14 +12,16 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from jinja2 import BaseLoader, Environment, StrictUndefined
 from xhtml2pdf import pisa
 
-_env = Environment(loader=BaseLoader(), undefined=StrictUndefined, autoescape=False)
+from ._jinja import make_env, resolve_strict
+
+_DEFAULT_STRICT = True
 
 
-def generate(template_bytes: bytes, content: dict) -> bytes:
-    html = _env.from_string(template_bytes.decode("utf-8")).render(**content)
+def generate(template_bytes: bytes, content: dict, strict=None) -> bytes:
+    env = make_env(resolve_strict(strict, _DEFAULT_STRICT))
+    html = env.from_string(template_bytes.decode("utf-8")).render(**content)
     out = BytesIO()
     result = pisa.CreatePDF(src=html, dest=out, encoding="utf-8")
     if result.err:
