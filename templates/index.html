@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f6f7fb" media="(prefers-color-scheme: light)" />
   <title>Document Generator — API tester</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
 </head>
@@ -28,12 +31,12 @@
 
       <div class="row" id="template-text-row">
         <label for="template_text">…or paste a text/HTML template</label>
-        <textarea id="template_text" name="template_text" rows="6" spellcheck="false" placeholder="Hello {{ name }}, your order {{ order_id }} is ready."></textarea>
+        <textarea id="template_text" name="template_text" rows="6" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" placeholder="Hello {{ name }}, your order {{ order_id }} is ready."></textarea>
       </div>
 
       <div class="row">
         <label for="content">Content (JSON)</label>
-        <textarea id="content" name="content" rows="8" spellcheck="false">{
+        <textarea id="content" name="content" rows="8" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off">{
   "name": "Ada Lovelace",
   "order_id": "A-1042"
 }</textarea>
@@ -42,7 +45,7 @@
 
       <div class="row">
         <label for="filename">Download filename <span class="muted">(optional)</span></label>
-        <input type="text" id="filename" name="filename" placeholder="document" />
+        <input type="text" id="filename" name="filename" placeholder="document" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" />
       </div>
 
       <div class="actions">
